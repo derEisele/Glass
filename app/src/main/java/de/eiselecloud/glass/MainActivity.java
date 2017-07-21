@@ -1,9 +1,13 @@
 package de.eiselecloud.glass;
 
+import android.content.res.Configuration;
 import android.net.Uri;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
+import android.util.Log;
+import android.view.Surface;
+import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 import android.view.View;
 import android.support.design.widget.NavigationView;
@@ -14,6 +18,7 @@ import android.support.v7.app.AppCompatActivity;
 import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.ViewGroup;
 import android.widget.FrameLayout;
 import android.widget.Gallery;
 
@@ -25,6 +30,14 @@ import org.videolan.libvlc.MediaPlayer;
 public class MainActivity extends AppCompatActivity
         implements NavigationView.OnNavigationItemSelectedListener {
 
+    // size of the video
+    private int mVideoHeight;
+    private int mVideoWidth;
+    private int mVideoVisibleHeight;
+    private int mVideoVisibleWidth;
+    private int mSarNum;
+    private int mSarDen;
+
     private static final String SAMPLE_URL = "http://download.blender.org/peach/bigbuckbunny_movies/BigBuckBunny_640x360.m4v";
     private LibVLC mLibVLC = null;
     private MediaPlayer mMediaPlayer = null;
@@ -32,6 +45,8 @@ public class MainActivity extends AppCompatActivity
     private FrameLayout mVideoSurfaceFrame = null;
     private SurfaceView mVideoSurface = null;
     private SurfaceView mSubtitlesSurface = null;
+    private SurfaceHolder mSurfaceHolder;
+    private Surface mSurface = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -123,20 +138,69 @@ public class MainActivity extends AppCompatActivity
 
         mVideoSurfaceFrame = (FrameLayout) findViewById(R.id.video_surface_frame);
         mVideoSurface = (SurfaceView) findViewById(R.id.video_surface);
+        mSurfaceHolder = mVideoSurface.getHolder();
+        mSurface = mSurfaceHolder.getSurface();
 
     }
 
     private void initVideo(){
         final IVLCVout ivlcVout = mMediaPlayer.getVLCVout();
         //ivlcVout.setWindowSize(500,500);
-        ivlcVout.setVideoView(mVideoSurface);
+        //ivlcVout.setVideoView(mVideoSurface);
+        ivlcVout.setVideoSurface(mSurface,mSurfaceHolder);
         ivlcVout.attachViews();
+        setSize(mVideoWidth, mVideoHeight);
 
         Media media = new Media(mLibVLC, Uri.parse(SAMPLE_URL));
         mMediaPlayer.setMedia(media);
         media.release();
         mMediaPlayer.play();
     }
+
+
+
+    private void setSize(int width, int height) {
+        mVideoWidth = width;
+        mVideoHeight = height;
+        if (mVideoWidth * mVideoHeight <= 1)
+            return;
+
+        if(mSurfaceHolder == null || mVideoSurface == null)
+            return;
+
+        // get screen size
+        int w = getWindow().getDecorView().getWidth();
+        int h = getWindow().getDecorView().getHeight();
+
+        // getWindow().getDecorView() doesn't always take orientation into
+        // account, we have to correct the values
+        boolean isPortrait = getResources().getConfiguration().orientation == Configuration.ORIENTATION_PORTRAIT;
+        if (w > h && isPortrait || w < h && !isPortrait) {
+            int i = w;
+            w = h;
+            h = i;
+        }
+
+        float videoAR = (float) mVideoWidth / (float) mVideoHeight;
+        float screenAR = (float) w / (float) h;
+
+        if (screenAR < videoAR)
+            h = (int) (w / videoAR);
+        else
+            w = (int) (h * videoAR);
+
+        // force surface buffer size
+        mSurfaceHolder.setFixedSize(mVideoWidth, mVideoHeight);
+
+        // set display size
+
+        ViewGroup.LayoutParams lp = mVideoSurface.getLayoutParams();
+        lp.width = w;
+        lp.height = h;
+        mVideoSurface.setLayoutParams(lp);
+        mVideoSurface.invalidate();
+    }
+
 
     private void stopVideo(){
         mMediaPlayer.stop();
